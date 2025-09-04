@@ -1,6 +1,4 @@
-# Brainstorming
-
-Das letzte Brainstorming
+# Brainstorming 4.9.2025
 
 ## Arbeitsteile:
 
@@ -16,21 +14,26 @@ Das letzte Brainstorming
 ## User Stories:
 
 - Ich suche ein Buch "xyz" und bekomme die Information, wo das Buch ist.
-
 - Ich nehme ein Buch weg
-
 - Ich bringe ein bekanntes Buch zurück
-
 - Ich stelle ein neues Buch hinein
-
 - Ich will ein Buch permanent wegnehmen.
 
 ## Systemkomponenten:
 
 1. Kamera
-
 1. Computer für die Kamera + ML
-
 1. Computer Datenbank
- 
 1. Computer Webseite / Display
+
+## Werkzeuge
+
+- Programmiersprache für Kamera und OCR mit ML
+- Web-Programmier-Sprache
+- Versionverwaltung
+	- git und github
+	- github desktop
+	- Maintainer: Yüce
+	- Contributoren: Saleh, Özcifci, Nikolic, WOR
+	
+
