@@ -1,0 +1,36 @@
+# Brainstorming
+
+Das letzte Brainstorming
+
+## Arbeitsteile:
+
+1. Datenbank
+1. Kamera verbinden
+1. Segmentieren
+	- Buchrücken
+	- Ort
+1. OCR eines Buchrückens
+1. DB mit Büchern
+1. DB-Oberfläche
+
+## User Stories:
+
+- Ich suche ein Buch "xyz" und bekomme die Information, wo das Buch ist.
+
+- Ich nehme ein Buch weg
+
+- Ich bringe ein bekanntes Buch zurück
+
+- Ich stelle ein neues Buch hinein
+
+- Ich will ein Buch permanent wegnehmen.
+
+## Systemkomponenten:
+
+1. Kamera
+
+1. Computer für die Kamera + ML
+
+1. Computer Datenbank
+ 
+1. Computer Webseite / Display
