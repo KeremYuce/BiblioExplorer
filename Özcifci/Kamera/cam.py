@@ -2,7 +2,7 @@ import cv2
 
 # Haar-Cascade laden
 face_cascade = cv2.CascadeClassifier(
-    "/home/yz/Kamera/haarcascade_frontalface_default.xml"
+    "haarcascade_frontalface_default.xml"
 )
 
 # Kamera starten
