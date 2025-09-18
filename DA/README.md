@@ -1,4 +1,6 @@
-#Teil A /Kerem Yüce
-#Teil B /Nada Saleh
-#Teil C /Yusuf Özcifci
-#Teil D /Andjela Nikolic
+| Abschnitt | Verantwortliche Person |
+|-----------|------------------------|
+| **Teil A** | Kerem Yüce            |
+| **Teil B** | Nada Saleh            |
+| **Teil C** | Andjela Nikolic       |
+| **Teil D** | Yusuf Özcifci         |
