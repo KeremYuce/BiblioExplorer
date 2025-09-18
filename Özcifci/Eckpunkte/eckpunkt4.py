@@ -75,7 +75,7 @@ def click_event(event, x, y, flags, param):
             cv2.destroyAllWindows()
 
 # Bild einlesen
-img = cv2.imread('/home/yz/buch.jpg')
+img = cv2.imread('buch.jpg')
 
 # Bild anzeigen und Punkte auswählen
 cv2.imshow("Select Points", img)
