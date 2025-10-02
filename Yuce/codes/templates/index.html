@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <title>Bibliothek</title>
+</head>
+<body>
+  <h1> Bücherliste</h1>
+  <table border="1" cellpadding="5">
+    <tr><th>ID</th><th>Titel</th><th>Autor</th><th>Standort</th></tr>
+    {% for book in books %}
+    <tr>
+      <td>{{ book.id }}</td>
+      <td>{{ book.title }}</td>
+      <td>{{ book.author }}</td>
+      <td>{{ book.location }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <br>
+  <table border="1" cellpadding="5">
+  <tr><th>ID</th><th>Titel</th><th>Autor</th><th>Standort</th><th>Aktion</th></tr>
+  {% for book in books %}
+  <tr>
+    <td>{{ book.id }}</td>
+    <td>{{ book.title }}</td>
+    <td>{{ book.author }}</td>
+    <td>{{ book.location }}</td>
+    <td>
+      <form action="/delete/{{ book.id }}" method="post" style="display:inline;">
+        <button type="submit" onclick="return confirm('Wirklich löschen?');">❌ Löschen</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<br>
+  <a href="/add"> Neues Buch hinzufügen</a>
+</body>
+</html>
