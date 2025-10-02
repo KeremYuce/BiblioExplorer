@@ -51,11 +51,11 @@ Ja, ich bin leider krank geworden. Ein Virus streckt mich für diese Woche niede
 
 ## Die Punkte-Erkennung sollte in 2 Phasen laufen:
 
-1) Ein Programm z.B. „setup_corners.py“ misst die Ecken aus und speichert die Koordinaten in einer Setup-Datei.
+1. Ein Programm z.B. „setup_corners.py“ misst die Ecken aus und speichert die Koordinaten in einer Setup-Datei.
   Zu große Bilder sollen in der Darstellung auf maximal Bildschirmgröße skaliert werden,
   die Koordinaten beziehen sich natürlich auf die Original-Auflösung (Mauskoordinaten zurückscalieren)
 
-2) Ein anderes Programm z.B. „image_scan.py“ liest die Einstellungen und wandelt die Bilder
+2. Ein anderes Programm z.B. „image_scan.py“ liest die Einstellungen und wandelt die Bilder
   permanent um. Endlos, bis es gestoppt wird.
   Als Ausgabe könnte man ein Fenster machen, in dem
 	- das Original-Bild und
@@ -65,14 +65,14 @@ Ja, ich bin leider krank geworden. Ein Virus streckt mich für diese Woche niede
 
 **Neu und separat:**
 
-3) Machen Sie ein Foto von einem Stapel Bücher. Dieses Foto soll mit OpenCV
-  eingelesen werden und mit Hilfe einer PCR sollen alle Texte extrahiert werden.
+3. Machen Sie ein Foto von einem Stapel Bücher. Dieses Foto soll mit OpenCV
+  eingelesen werden und mit Hilfe einer OCR sollen alle Texte extrahiert werden.
   Schnelle google-Suche:
   https://www.geeksforgeeks.org/python/text-detection-and-extraction-using-opencv-and-ocr/
 
-4) Welche Daten liefert die OCR? Kann man die einzelnen Texte sinnvoll trennen?
+4. Welche Daten liefert die OCR? Kann man die einzelnen Texte sinnvoll trennen?
 
-5) Das Bild im Original, dann 90, 180 und 270 Grad gedreht analysieren (alles in OpenCV)
+5. Das Bild im Original, dann 90, 180 und 270 Grad gedreht analysieren (alles in OpenCV)
 
 ## Die Datenbank-Gruppe
 
@@ -83,3 +83,25 @@ Zeichnen Sie zuerst ein vereinfachtes Datenbank-Schema für eine SQL-Datenbank (
 Bücher und Standorte verwaltet.
 
 Die Weboberfläche soll dann einen einfachen Zugriff darauf haben.
+
+# Arbeit 2.10.2025
+
+**OCR-Gruppe**
+
+1. Git organisieren + Namen Ändern 
+
+2. Testfoto: OCR anstoßen (in python) und versuchen, alle vorkommenden Textblöcke zu erfassen. -> Liste mit Text und bounding-box 
+
+3. Integration der OCR in das Programm "image_scan.py"
+   (regelmäßig wird ein Bild gescannt und die OCR angeschubst)
+
+**DB-Gruppe**
+
+1. DB-Schema in SQL
+
+2. Wahl der Software: python mit flask und sqlite3
+
+3. **User-Stories** für die Verwendung der Datenbank
+
+4. **Frontend**: Evtl. ein kleines Framework (javascript) oder in Handarbeit w3schools.com
+
