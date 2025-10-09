@@ -105,3 +105,24 @@ Die Weboberfläche soll dann einen einfachen Zugriff darauf haben.
 
 4. **Frontend**: Evtl. ein kleines Framework (javascript) oder in Handarbeit w3schools.com
 
+# Arbeit 9.10.2025
+
+**OCR-Gruppe**
+
+1. Vereinfachen der mehreren Programme (S/W und W/S) in eines
+
+2. Versuche, das `dict` Dictioanry mit den Ergennissen auszugeben
+
+3. Räumliches Clustering der Texte mit einem K-Means Algorithmus
+
+**DB-Gruppe**
+
+1. Installation XAMPP
+
+2. Erstellen einer Demo-DB mit phpmyadmin
+
+3. 2 Varianten:
+
+    A. Eine PHP-Seite "altmodisch.php", die die Daten direkt in eine HTML-Tabelle schreibt.
+    
+    B. Eine Leere HTML-Seite "neumodisch.html" mit Javascript. Das Script holt die Daten über eine Hilfs-PHP-Seite "daten.json.php", welche die Daten als JSON verpackt ausliefert. Im Client (JS) werden die Daten in die leere Tabelle eingefügt.
