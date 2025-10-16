@@ -126,3 +126,20 @@ Die Weboberfläche soll dann einen einfachen Zugriff darauf haben.
     A. Eine PHP-Seite "altmodisch.php", die die Daten direkt in eine HTML-Tabelle schreibt.
     
     B. Eine Leere HTML-Seite "neumodisch.html" mit Javascript. Das Script holt die Daten über eine Hilfs-PHP-Seite "daten.json.php", welche die Daten als JSON verpackt ausliefert. Im Client (JS) werden die Daten in die leere Tabelle eingefügt.
+
+# Arbeit 16.10.2025
+
+**OCR-Gruppe**
+
+- Gruppierung der Wortfetzen mit dem K-Means Algorithmus (siehe Vorwoche)
+
+- Readme.md um die Software installieren und starten zu können (mit venv)
+ 
+**DB-Gruppe**
+
+- Erstellen einer sauberen Datenbank mit Probebüchern
+
+- Eintragen von 4 Büchern über eine DB-Oberfläche
+
+- evtl. Eintragen über die ISBN und holen der Daten aus dem Internet via z.B. Amazon-API
+
