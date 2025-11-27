@@ -143,3 +143,8 @@ Die Weboberfläche soll dann einen einfachen Zugriff darauf haben.
 
 - evtl. Eintragen über die ISBN und holen der Daten aus dem Internet via z.B. Amazon-API
 
+# Arbeiten 27.11.2025
+
+**DB-Gruppe**
+
+- DB-Probleme korrigieren
