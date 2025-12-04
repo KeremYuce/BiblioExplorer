@@ -1,7 +1,7 @@
 <?php
 $servername = "localhost";
 $username = "root";  // Standardbenutzername für XAMPP
-$password = "ustus6618";      // Standardpasswort für XAMPP ist leer
+$password = "";      // Standardpasswort für XAMPP ist leer
 $dbname = "biblio";  // Name der erstellten Datenbank
 
 // Verbindung zu MySQL herstellen
@@ -61,3 +61,4 @@ $conn->close();
     </form>
 </body>
 </html>
+
