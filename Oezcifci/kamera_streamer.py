@@ -3,37 +3,7 @@ import pytesseract
 import numpy as np
 import json
 
-
-def koordinaten():
-    try:
-        with open("ecken.json", "r") as f:
-            ecken = json.load(f)  # JSON-Daten einlesen
-            print("Ecken aus der JSON-Datei:", ecken)
-            return ecken
-    except FileNotFoundError:
-        print("Fehler: Die Datei 'ecken.json' wurde nicht gefunden.")
-        return []
-    except json.JSONDecodeError:
-        print("Fehler: Fehler beim Parsen der JSON-Datei.")
-        return []
         
-def extrahiere_bereich(frame, ecken):
-    # Umwandeln der Ecken in NumPy Array
-    ecken_array = np.array(ecken, np.int32)
-    ecken_array = ecken_array.reshape((-1, 1, 2))
-
-    # Erstelle eine leere Maske (Schwarz)
-    maske = np.zeros_like(frame)
-
-    # Fülle das Polygon (definiert durch die Ecken) auf der Maske mit Weiß
-    cv.fillPoly(maske, [ecken_array], (255, 255, 255))
-
-    # Maskiere das Originalbild mit der Maske
-    extrahierter_bereich = cv.bitwise_and(frame, maske)
-
-    return extrahierter_bereich
-
-
 
 # Funktion zur Verbesserung des Bildes für schwarzen Text auf hellem Hintergrund
 def preprocess_black_text(image):
@@ -109,39 +79,83 @@ def scan_image_regularly(image_path):
     # OCR auf das Bild innerhalb des markierten Bereichs anwenden
     perform_ocr(image)
 
+
+
+# lese Koordinaten ein
+def koordinaten():
+	with open("ecken.json", "r") as f:
+		ecken = json.load(f)  # JSON-Daten einlesen
+		print(f"Ecken aus der JSON-Datei: {ecken}")
+		return ecken
+
+
+def entzerren_bild(frame, ecken, sz=1024):
+
+    breite = sz  
+    hoehe = int(sz*1.5)
+    # Ziel-Koordinaten:   
+    ziel_koordinaten = np.array([[0, 0], [breite - 1, 0], [breite - 1, hoehe - 1], [0, hoehe - 1]], dtype=np.float32)
+
+    # Umwandeln der Ecken in NumPy Array
+    ecken_array = np.array(ecken, np.float32)
+    #print(ecken_array)
+    #print(ziel_koordinaten)
+
+    # Berechne die Homographie-Matrix
+    homographie_matrix, _ = cv2.findHomography(ecken_array, ziel_koordinaten)
+
+    # Wende die Perspektivische Transformation an (entzerrte Ansicht)
+    entzerrtes_bild = cv2.warpPerspective(frame, homographie_matrix, (breite, hoehe))
+
+    return entzerrtes_bild
+
+
+
+
 # Hauptprogramm
 if __name__ == "__main__":
+
 	
-    cap = cv2.VideoCapture(0)  # Standardkamera
-if not cap.isOpened():
-    print("Fehler: Kamera konnte nicht geöffnet werden.")
-    exit(1)
+	cap = cv2.VideoCapture(0)  # Standardkamera
+	if not cap.isOpened():
+		print("Fehler: Kamera konnte nicht geöffnet werden.")
+		exit(1)
+		
+	cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  # Setze die Breite auf 1920 Pixel
+	cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 960) 
 
-ecken = koordinaten()
+	frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+	frame_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
 
-while True:
-    ret, frame = cap.read()
+	print(f"Frame Höhe: {frame_height}")
+	print(f"Frame Breite: {frame_width}")
 
-    if not ret:
-        print("Fehler: Kein Bild von der Kamera erhalten.")
-        break
 
-    if ecken:
-        entzerrtes_bild = entzerren_bild(frame, ecken)
+	ecken = koordinaten()
 
-        # Zeige das entzerrte Bild an
-        cv2.imshow("Entzerrtes Bild", entzerrtes_bild)
+	while True:
+		ret, frame = cap.read()
 
-    
+		if not ret:
+			print("Fehler: Kein Bild von der Kamera erhalten.")
+			break
+			
+		quadrat = entzerren_bild(frame, ecken)
+		# Zeige das Bild an
+		cv2.imshow("Kamera Stream", quadrat)
+		
+		# OCR auf quadrat
+		#perform_ocr(frame)
 
-    # Zeige das Bild an
-    cv2.imshow("Kamera Stream", frame)
+		# Beenden, wenn 'q' gedrückt wird
+		if cv2.waitKey(1) & 0xFF == ord('q'):
+			break
 
-    # Beenden, wenn 'q' gedrückt wird
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-cap.release()
-cv2.destroyAllWindows()
+		if cv2.getWindowProperty("Kamera Stream", cv2.WND_PROP_VISIBLE) < 1:
+			break
+
+	cap.release()
+	cv2.destroyAllWindows()
 
 	# json-datei mit 4 Ecken einlesen
 	
