@@ -116,13 +116,14 @@ def entzerren_bild(frame, ecken, sz=1024):
 if __name__ == "__main__":
 
 	
-	cap = cv2.VideoCapture(0)  # Standardkamera
+	cap = cv2.VideoCapture(0, cv2.CAP_V4L2)  # Standardkamera
 	if not cap.isOpened():
 		print("Fehler: Kamera konnte nicht geöffnet werden.")
 		exit(1)
 		
-	cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  # Setze die Breite auf 1920 Pixel
-	cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 960) 
+	cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)  # Setze die Breite auf 1920 Pixel
+	cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+	
 
 	frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 	frame_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
