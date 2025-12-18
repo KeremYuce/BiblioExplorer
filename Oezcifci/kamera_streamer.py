@@ -121,8 +121,10 @@ if __name__ == "__main__":
 		print("Fehler: Kamera konnte nicht geöffnet werden.")
 		exit(1)
 		
-	cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)  # Setze die Breite auf 1920 Pixel
-	cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+	cap.set(cv2.CAP_PROP_FRAME_WIDTH, 3840)  # Setze die Breite auf 1920 Pixel
+	cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 2160)
+
+	cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
 	
 
 	frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
