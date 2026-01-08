@@ -70,6 +70,9 @@ if __name__ == "__main__":
 
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
+            
+        if cv.getWindowProperty("Bild mit Auswahl", cv.WND_PROP_VISIBLE) < 1:
+            break
+
 
     cv.destroyAllWindows()
-W

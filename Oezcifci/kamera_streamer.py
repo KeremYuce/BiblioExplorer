@@ -87,10 +87,6 @@ def koordinaten():
 		ecken = json.load(f)  # JSON-Daten einlesen
 		print(f"Ecken aus der JSON-Datei: {ecken}")
 		return ecken
-
-import cv2
-import numpy as np
-
 def sortiere_ecken(pts):
     # Sortiert die Punkte: [Oben-Links, Oben-Rechts, Unten-Rechts, Unten-Links]
     pts = np.array(pts, dtype="float32")
