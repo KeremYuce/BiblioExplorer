@@ -6,34 +6,34 @@ ecken = []
 
 # Funktion zum Zeichnen des 4-Ecks mit der Maus
 def mausklick(event, x, y, flags, param):
-    global scaled_image  
+    global scaled_image, ecken, frame_width, frame_height
 
     if event == cv.EVENT_LBUTTONDOWN:
-        # Wenn der linke Button gedrückt wird, Start des Rechtecks
+        # 1. Speichere Klick für Anzeige
         ecken.append((x, y))
         
+        # 2. Wenn 4 Ecken voll sind: Umrechnen und Speichern
         if len(ecken) == 4:
+            echte_ecken = []
+            for ex, ey in ecken:
+                orig_x, orig_y = umrechnung_koordinaten(ex, ey, frame_width, frame_height, 1920, 1080)
+                echte_ecken.append((orig_x, orig_y))
+            
             with open("ecken.json", "w") as f:
-                json.dump(ecken, f)
-                print("Corners Wrote into ecken.json")
+                json.dump(echte_ecken, f)
+                print(f"Erfolg: 4K-Koordinaten gespeichert: {echte_ecken}")
             exit(0)
         
-        # Zeichne auf dem skalierten Bild
+        # Zeichnen
         cv.ellipse(scaled_image, (x, y), (10, 10), 0, 0, 360, (255, 0, 0), 5)
-        
         eckeni32 = np.array(ecken, np.int32)
-
-        # Reshape für die cv.polylines Funktion (NumPy Array muss 1D für die Polylines-Funktion sein)
         eckeni32_shaped = eckeni32.reshape((-1, 1, 2))
-
-        # Zeichne das Polygon
         cv.polylines(scaled_image, [eckeni32_shaped], isClosed=False, color=(0, 255, 0), thickness=3)
-
         cv.imshow("Bild mit Auswahl", scaled_image)
-    elif event == cv.EVENT_MOUSEMOVE:
-        # Temporäres Rechteck beim Ziehen anzeigen
+
+    elif event == cv.EVENT_MOUSEMOVE:  # <-- Dieses 'elif' muss bündig mit 'if event == cv.EVENT_LBUTTONDOWN:' sein
         if len(ecken) > 0:
-            line_start = ecken[-1]  # letztes Element
+            line_start = ecken[-1]
             line_end = (x, y)
             temp_image = scaled_image.copy()
             cv.line(temp_image, line_start, line_end, (255, 255, 0), 3)

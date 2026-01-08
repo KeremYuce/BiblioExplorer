@@ -91,20 +91,23 @@ def koordinaten():
 
 def entzerren_bild(frame, ecken, sz=1024):
 
-    breite = sz  
-    hoehe = int(sz*1.5)
-    # Ziel-Koordinaten:   
-    ziel_koordinaten = np.array([[0, 0], [breite - 1, 0], [breite - 1, hoehe - 1], [0, hoehe - 1]], dtype=np.float32)
+    w = np.sqrt((ecken[1][0] - ecken[0][0])**2 + (ecken[1][1] - ecken[0][1])**2)
 
-    # Umwandeln der Ecken in NumPy Array
+    h = np.sqrt((ecken[3][0] - ecken[0][0])**2 + (ecken[3][1] - ecken[0][1])**2)
+    
+    aspekt = h / w
+    
+    breite = sz
+    hoehe = int(sz * aspekt)
+    ziel_koordinaten = np.array([
+        [0, 0], 
+        [breite - 1, 0], 
+        [breite - 1, hoehe - 1], 
+        [0, hoehe - 1]
+    ], dtype=np.float32)
+
     ecken_array = np.array(ecken, np.float32)
-    #print(ecken_array)
-    #print(ziel_koordinaten)
-
-    # Berechne die Homographie-Matrix
     homographie_matrix, _ = cv2.findHomography(ecken_array, ziel_koordinaten)
-
-    # Wende die Perspektivische Transformation an (entzerrte Ansicht)
     entzerrtes_bild = cv2.warpPerspective(frame, homographie_matrix, (breite, hoehe))
 
     return entzerrtes_bild
