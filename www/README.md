@@ -14,6 +14,24 @@
 ### User Story 7: Als Kunde möchte ich sehen, wo sich das ausgewählte Buch befindet
 
 ### User Story 8: Als Kunde möchte ich sehen ob ein Buch verfügbar ist oder nicht
- 
+
+## User Story 9:
+Als Benutzer möchte ich nach Büchern in der Datenbank suchen können.
+
+## User Story 10:
+Als Benutzer möchte ich das keine Duplikate in der Datenbank entstehen können.
+
+## User Story 11:
+Als Benutzer möchte ich das Bücher die nicht mehr im Regal sind als nicht anwesend markiert werden oder nicht angezeigt werden.
+
+## User Story 12:
+Als Benutzer möchte ich das ich Bücher dauerhaft aus der Datenbank löschen kann.
+
+## User Story 13:
+Als Benutzer möchte ich das ich Bücher in die Datenbank manuell einfügen kann.
+
+## User Story 14:
+Als Benutzer möchte ich das Bücher die gelöscht wurden dennoch für eine bestimmte zeit in einem Backup gespeichert werden.
+
 
 
