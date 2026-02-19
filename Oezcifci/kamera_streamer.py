@@ -20,15 +20,13 @@ def preprocess_white_text(image):
 
 # Funktion zur Durchführung der OCR innerhalb des markierten Bereichs
 def perform_ocr(image):
-    # 1. Vorverarbeitung
-    processed_black = preprocess_black_text(image)
-    processed_white = preprocess_white_text(image)
     
-    # 2. OCR Daten extrahieren (als Dictionary)
-    dpm_black = pytesseract.image_to_data(processed_black, output_type=pytesseract.Output.DICT)
-    dpm_white = pytesseract.image_to_data(processed_white, output_type=pytesseract.Output.DICT)
 
-    # 3. Schwarzen Text verarbeiten (Grüne Boxen)
+    # A. Schwarzen Text verarbeiten (Grüne Boxen)
+    #  1. Vorverarbeitung
+    processed_black = preprocess_black_text(image)
+    #  2. OCR Daten extrahieren (als Dictionary)
+    dpm_black = pytesseract.image_to_data(processed_black, output_type=pytesseract.Output.DICT)
     for i in range(len(dpm_black['text'])):
         text = dpm_black['text'][i]
         conf = int(dpm_black['conf'][i])
@@ -37,8 +35,10 @@ def perform_ocr(image):
             (x, y, w, h) = (dpm_black['left'][i], dpm_black['top'][i], dpm_black['width'][i], dpm_black['height'][i])
             cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-
+    '''
     # 4. Weißen Text verarbeiten (Rote Boxen)
+    # dpm_white = pytesseract.image_to_data(processed_white, output_type=pytesseract.Output.DICT)
+    # processed_white = preprocess_white_text(image)
     for i in range(len(dpm_white['text'])):
         text = dpm_white['text'][i]
         conf = int(dpm_white['conf'][i])
@@ -47,7 +47,7 @@ def perform_ocr(image):
             (x, y, w, h) = (dpm_white['left'][i], dpm_white['top'][i], dpm_white['width'][i], dpm_white['height'][i])
             cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
             cv2.putText(image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-
+    '''
     return image
 
 # Lese Koordinaten ein
@@ -148,6 +148,7 @@ if __name__ == "__main__":
         
         # 3. OCR auf dem gedrehten Bild durchführen
         ocr_bild = perform_ocr(rotated_image)
+        temp_bild = preprocess_black_text(rotated_image)
         
         # 4. Bild anzeigen
         cv2.imshow("Kamera Stream", ocr_bild)
@@ -157,7 +158,7 @@ if __name__ == "__main__":
             break
 
         if cv2.getWindowProperty("Kamera Stream", cv2.WND_PROP_VISIBLE) < 1:
-            break
+            breakx
 
     cap.release()
     cv2.destroyAllWindows()

@@ -5,8 +5,7 @@ import sys
 
 ecken = []
 maus_pos = (0, 0)
-scale_percent = 25 # Hier definieren!
-
+scale_percent = 35
 def mausklick(event, x, y, flags, param):
     global ecken, maus_pos, frame_width, frame_height, scale_percent
     
