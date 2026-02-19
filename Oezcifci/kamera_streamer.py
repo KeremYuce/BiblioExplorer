@@ -2,70 +2,137 @@ import cv2
 import pytesseract
 import numpy as np
 import json
+import os
+import mysql.connector
+import time
+import threading
 
-# Funktion zur Verbesserung des Bildes für schwarzen Text auf hellem Hintergrund
-def preprocess_black_text(image):
+# --- GLOBALE VARIABLEN FÜR THREADING ---
+is_scanning = False
+letzte_ergebnisse = []
+
+# --- PREPROCESSING FUNKTIONEN ---
+
+def preprocess_color_agnostic(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-    return thresh
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    nodes_enhanced = clahe.apply(gray)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    gradient = cv2.morphologyEx(nodes_enhanced, cv2.MORPH_GRADIENT, kernel)
+    _, thresh = cv2.threshold(gradient, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    final_for_ocr = cv2.bitwise_not(thresh)
+    return final_for_ocr
 
-# Funktion zur Verbesserung des Bildes für weißen Text auf dunklem Hintergrund
-def preprocess_white_text(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    alpha, beta = 2.0, 50
-    adjusted = cv2.convertScaleAbs(gray, alpha=alpha, beta=beta)
-    inverted = cv2.bitwise_not(adjusted)
-    _, thresh = cv2.threshold(inverted, 150, 255, cv2.THRESH_BINARY)
-    return thresh
+def save_to_mysql(ergebnisse):
+    if not ergebnisse:
+        return
+    try:
+        conn = mysql.connector.connect(
+            host="localhost",
+            user="web",      
+            password="123web",      
+            database="biblio" 
+        )
+        cursor = conn.cursor()
+        
+        sql = """
+            INSERT INTO ocr_fragments (ocr_text, pos_x, pos_y) 
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+            pos_x = VALUES(pos_x), 
+            pos_y = VALUES(pos_y),
+            last_seen = CURRENT_TIMESTAMP
+        """
+        
+        for item in ergebnisse:
+            val = (str(item['wort']), str(item['x_relativ_prozent']), str(item['y_achse']))
+            cursor.execute(sql, val)
+        
+        cursor.execute("DELETE FROM ocr_fragments WHERE last_seen < NOW() - INTERVAL 40 SECOND")
+            
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"[SQL Fehler] {e}")
 
-# Funktion zur Durchführung der OCR innerhalb des markierten Bereichs
-def perform_ocr(image):
+def perform_ocr_thread(image_to_process, h_orig, w_orig):
+    """ Diese Funktion läuft im Hintergrund """
+    global is_scanning, letzte_ergebnisse
     
+    custom_config = r'--oem 3 --psm 11'
+    ergebnisse_liste = []
+    erkannte_woerter_lokal = set()
 
-    # A. Schwarzen Text verarbeiten (Grüne Boxen)
-    #  1. Vorverarbeitung
-    processed_black = preprocess_black_text(image)
-    #  2. OCR Daten extrahieren (als Dictionary)
-    dpm_black = pytesseract.image_to_data(processed_black, output_type=pytesseract.Output.DICT)
-    for i in range(len(dpm_black['text'])):
-        text = dpm_black['text'][i]
-        conf = int(dpm_black['conf'][i])
-        
-        if text.strip() and conf > 40: # Nur Text mit über 40% Sicherheit
-            (x, y, w, h) = (dpm_black['left'][i], dpm_black['top'][i], dpm_black['width'][i], dpm_black['height'][i])
-            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            cv2.putText(image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-    '''
-    # 4. Weißen Text verarbeiten (Rote Boxen)
-    # dpm_white = pytesseract.image_to_data(processed_white, output_type=pytesseract.Output.DICT)
-    # processed_white = preprocess_white_text(image)
-    for i in range(len(dpm_white['text'])):
-        text = dpm_white['text'][i]
-        conf = int(dpm_white['conf'][i])
-        
-        if text.strip() and conf > 40:
-            (x, y, w, h) = (dpm_white['left'][i], dpm_white['top'][i], dpm_white['width'][i], dpm_white['height'][i])
-            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            cv2.putText(image, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-    '''
-    return image
+    # Wir rotieren hier im Hintergrund-Thread
+    rotations = [
+        (image_to_process, 0),                                     
+        (cv2.rotate(image_to_process, cv2.ROTATE_90_CLOCKWISE), 90), 
+        (cv2.rotate(image_to_process, cv2.ROTATE_90_COUNTERCLOCKWISE), 270) 
+    ]
 
-# Lese Koordinaten ein
+    for img_rot, angle in rotations:
+        gray = cv2.cvtColor(img_rot, cv2.COLOR_BGR2GRAY)
+        agnostic = preprocess_color_agnostic(img_rot)
+        
+        for ocr_input in [gray, agnostic]:
+            d = pytesseract.image_to_data(ocr_input, config=custom_config, output_type=pytesseract.Output.DICT)
+            
+            for i in range(len(d['text'])):
+                text = d['text'][i].strip()
+                conf = int(d['conf'][i])
+
+                if conf > 65 and len(text) > 2 and text not in erkannte_woerter_lokal:
+                    x_ocr, y_ocr = d['left'][i], d['top'][i]
+                    w_box, h_box = d['width'][i], d['height'][i]
+
+                    # Koordinaten-Berechnung
+                    if angle == 90:
+                        new_x, new_y = y_ocr, h_orig - x_ocr - w_box
+                        target_w, target_h = h_box, w_box
+                    elif angle == 270:
+                        new_x, new_y = w_orig - y_ocr - h_box, x_ocr
+                        target_w, target_h = h_box, w_box
+                    else:
+                        new_x, new_y = x_ocr, y_ocr
+                        target_w, target_h = w_box, h_box
+
+                    drittel = h_orig / 3
+                    lade = "1" if new_y < drittel else "2" if new_y < (2 * drittel) else "3"
+
+                    ergebnisse_liste.append({
+                        "wort": text,
+                        "y_achse": lade,
+                        "x_pixel": new_x,
+                        "y_pixel": new_y,
+                        "w": target_w,
+                        "h": target_h,
+                        "x_relativ_prozent": round((new_x / w_orig) * 100, 1)
+                    })
+                    erkannte_woerter_lokal.add(text)
+
+    # Ergebnisse in DB speichern
+    save_to_mysql(ergebnisse_liste)
+    
+    # Ergebnisse für die Anzeige im Hauptthread spiegeln
+    letzte_ergebnisse = ergebnisse_liste
+    is_scanning = False # Thread fertig!
+
+# --- GEOMETRIE ---
+
 def koordinaten():
-    with open("ecken.json", "r") as f:
-        ecken = json.load(f)  # JSON-Daten einlesen
-        print(f"Ecken aus der JSON-Datei: {ecken}")
-        return ecken
+    try:
+        with open("ecken.json", "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
 
 def sortiere_ecken(pts):
-    # Sortiert die Punkte: [Oben-Links, Oben-Rechts, Unten-Rechts, Unten-Links]
     pts = np.array(pts, dtype="float32")
     rect = np.zeros((4, 2), dtype="float32")
-    
     s = pts.sum(axis=1)
     rect[0] = pts[np.argmin(s)]
     rect[2] = pts[np.argmax(s)]
-
     diff = np.diff(pts, axis=1)
     rect[1] = pts[np.argmin(diff)]
     rect[3] = pts[np.argmax(diff)]
@@ -73,7 +140,6 @@ def sortiere_ecken(pts):
 
 def entzerren_bild(frame, ecken, sz=1280):
     ecken_sortiert = sortiere_ecken(ecken)
-
     w1 = np.linalg.norm(ecken_sortiert[1] - ecken_sortiert[0])
     w2 = np.linalg.norm(ecken_sortiert[2] - ecken_sortiert[3])
     h1 = np.linalg.norm(ecken_sortiert[3] - ecken_sortiert[0])
@@ -85,80 +151,66 @@ def entzerren_bild(frame, ecken, sz=1280):
     if breite_original > hoehe_original:
         ziel_w = int(sz * (hoehe_original / breite_original))
         ziel_h = sz
-
-        ziel_koordinaten = np.array([
-            [ziel_w - 1, 0],        
-            [ziel_w - 1, ziel_h - 1],  
-            [0, ziel_h - 1],            
-            [0, 0]                
-        ], dtype=np.float32)
+        ziel_koordinaten = np.array([[ziel_w - 1, 0], [ziel_w - 1, ziel_h - 1], [0, ziel_h - 1], [0, 0]], dtype=np.float32)
     else:
-        # Falls es schon hochkant ist, nur skalieren
         ziel_w = sz
         ziel_h = int(sz * (hoehe_original / breite_original))
-        ziel_koordinaten = np.array([
-            [0, 0],
-            [ziel_w - 1, 0],
-            [ziel_w - 1, ziel_h - 1],
-            [0, ziel_h - 1]
-        ], dtype=np.float32)
+        ziel_koordinaten = np.array([[0, 0], [ziel_w - 1, 0], [ziel_w - 1, ziel_h - 1], [0, ziel_h - 1]], dtype=np.float32)
 
-    # 4. Transformation
     matrix = cv2.getPerspectiveTransform(ecken_sortiert, ziel_koordinaten)
-    entzerrtes_bild = cv2.warpPerspective(frame, matrix, (ziel_w, ziel_h))
+    return cv2.warpPerspective(frame, matrix, (ziel_w, ziel_h))
 
-    return entzerrtes_bild
+# --- MAIN ---
 
-# Hauptprogramm
 if __name__ == "__main__":
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)  # Standardkamera
-    if not cap.isOpened():
-        print("Fehler: Kamera konnte nicht geöffnet werden.")
-        exit(1)
-        
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 3840)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 2160)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     
-    frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    frame_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-
-    print(f"Frame Höhe: {frame_height}")
-    print(f"Frame Breite: {frame_width}")
-
     ecken = koordinaten()
 
     while True:
         ret, frame = cap.read()
-
-        if not ret:
-            print("Fehler: Kein Bild von der Kamera erhalten.")
-            break
+        if not ret: break
             
+        if not ecken:
+            cv2.imshow("Kamera Stream", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
+            continue
+
         quadrat = entzerren_bild(frame, ecken)
-        
-        # Skalierung für die Anzeige
-        scale_percent = 75
-        width = int(quadrat.shape[1] * scale_percent / 100)
-        height = int(quadrat.shape[0] * scale_percent / 100)
-        display_size = (width, height)
-        resized_quadrat = cv2.resize(quadrat, display_size, interpolation=cv2.INTER_AREA)
+        scale = 75
+        width = int(quadrat.shape[1] * scale / 100)
+        height = int(quadrat.shape[0] * scale / 100)
+        resized = cv2.resize(quadrat, (width, height), interpolation=cv2.INTER_AREA)
+        rotated = cv2.rotate(resized, cv2.ROTATE_180)
 
-        rotated_image = cv2.rotate(resized_quadrat, cv2.ROTATE_180)
-        
-        # 3. OCR auf dem gedrehten Bild durchführen
-        ocr_bild = perform_ocr(rotated_image)
-        temp_bild = preprocess_black_text(rotated_image)
-        
-        # 4. Bild anzeigen
-        cv2.imshow("Kamera Stream", ocr_bild)
-        
-        # Beenden, wenn 'q' gedrückt wird oder Fenster geschlossen wird
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # --- MULTITHREADING LOGIK ---
+        if not is_scanning:
+            is_scanning = True
+            # Starte OCR im Hintergrund
+            h_r, w_r = rotated.shape[:2]
+            t = threading.Thread(target=perform_ocr_thread, args=(rotated.copy(), h_r, w_r))
+            t.daemon = True # Thread beendet sich, wenn Hauptprogramm schließt
+            t.start()
 
-        if cv2.getWindowProperty("Kamera Stream", cv2.WND_PROP_VISIBLE) < 1:
-            breakx
+        # Zeichne die letzten erkannten Wörter (damit es nicht flackert)
+        for res in letzte_ergebnisse:
+            color = (0, 255, 0)
+            cv2.rectangle(rotated, (res['x_pixel'], res['y_pixel']), 
+                          (res['x_pixel'] + res['w'], res['y_pixel'] + res['h']), color, 2)
+            cv2.putText(rotated, res['wort'], (res['x_pixel'], res['y_pixel'] - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+        # Status-Anzeige
+        status_text = "SCANNING..." if is_scanning else "WAITING..."
+        cv2.putText(rotated, status_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+        cv2.imshow("Kamera Stream", rotated)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'): break
+        if cv2.getWindowProperty("Kamera Stream", cv2.WND_PROP_VISIBLE) < 1: break
 
     cap.release()
     cv2.destroyAllWindows()
