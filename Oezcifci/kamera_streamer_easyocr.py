@@ -20,84 +20,29 @@ reader = easyocr.Reader(['de', 'en'])
 # --- GLOBALE VARIABLEN FÜR THREADING ---
 is_scanning = False
 letzte_ergebnisse = []
+running = True
 
 # --- PREPROCESSING FUNKTIONEN ---
-'''
-def preprocess_gray(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    return gray
 
-def preprocess_black_text(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                   cv2.THRESH_BINARY, 11, 2)
-    return thresh
-
-def preprocess_white_text(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    inverted = cv2.bitwise_not(gray)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
-    enhanced = clahe.apply(inverted)
-    blurred = cv2.GaussianBlur(enhanced, (3, 3), 0)
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                   cv2.THRESH_BINARY, 11, 2)
-    return thresh
-
-def preprocess_color_agnostic(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    nodes_enhanced = clahe.apply(gray)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    gradient = cv2.morphologyEx(nodes_enhanced, cv2.MORPH_GRADIENT, kernel)
-    _, thresh = cv2.threshold(gradient, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    final_for_ocr = cv2.bitwise_not(thresh)
-    return final_for_ocr
-
-def preprocess_gemini(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # Wandelt das Bild in echtes Schwarz-Weiß um
-    # cv2.THRESH_BINARY_INV nutzen, falls der Text hell auf dunklem Grund ist
-    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    return thresh
-
-def preprocess_mono(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # Wandelt das Bild in echtes Schwarz-Weiß um
-    # cv2.THRESH_BINARY_INV nutzen, falls der Text hell auf dunklem Grund ist
-    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    _, thresh_inv = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-    return thresh, thresh_inv
-'''
 def preprocess(image):
     # 1. Farbraum-Wechsel: LAB trennt Helligkeit (L) von Farbinformation (A, B)
-    # Das ist oft stabiler gegen Schatten als BGR-Graustufen.
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l_channel, a_channel, b_channel = cv2.split(lab)
 
     # 2. Kontrast-Begrenztes Adaptives Histogramm-Equalization (CLAHE)
-    # Verbessert den lokalen Kontrast, ohne das Rauschen extrem zu verstärken.
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     enhanced_l = clahe.apply(l_channel)
 
-    # 3. Kanten erhalten durch Bilateral Filter (besser als Gaussian für OCR)
-    # Er macht Flächen glatt, lässt die Buchstabenränder aber knallhart.
+    # 3. Kanten erhalten durch Bilateral Filter
     filtered = cv2.bilateralFilter(enhanced_l, 9, 75, 75)
 
-    # 4. Adaptives Thresholding (Statt globalem Otsu)
-    # Das ist der "Killer" für Buchrücken, da es mit Licht/Schatten-Gradienten umgeht.
+    # 4. Adaptives Thresholding
     thresh = cv2.adaptiveThreshold(
         filtered, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
         cv2.THRESH_BINARY, 11, 2
     )
     
-    # Invertierte Version für hellen Text auf dunklem Grund
+    # Invertierte Version
     thresh_inv = cv2.bitwise_not(thresh)
 
     return thresh, thresh_inv
@@ -140,71 +85,72 @@ def save_to_mysql(ergebnisse):
 
 def perform_ocr_thread(img_original):
     """ Diese Funktion läuft im Hintergrund """
-    global is_scanning, letzte_ergebnisse
+    global is_scanning, letzte_ergebnisse, running
     
-    # EasyOCR arbeitet am besten mit RGB
-    img_rgb = cv2.cvtColor(img_original, cv2.COLOR_BGR2RGB)
-    h_orig, w_orig = img_rgb.shape[:2]
-    
-    ergebnisse_liste = []
-
-    # Wir rotieren hier im Hintergrund-Thread
-    variants = [
-        (img_rgb, 0),                                     
-        (cv2.rotate(img_rgb, cv2.ROTATE_90_CLOCKWISE), 90), 
-        (cv2.rotate(img_rgb, cv2.ROTATE_180), 180), 
-        (cv2.rotate(img_rgb, cv2.ROTATE_90_COUNTERCLOCKWISE), 270),
-    ]
-
-    for img_rot, angle in variants:
-        # EasyOCR liefert (bbox, text, conf)
-        # bbox: [[x,y], [x,y], [x,y], [x,y]]
-        results = reader.readtext(img_rot)
+    try:
+        # EasyOCR arbeitet am besten mit RGB
+        img_rgb = cv2.cvtColor(img_original, cv2.COLOR_BGR2RGB)
+        h_orig, w_orig = img_rgb.shape[:2]
         
-        for (bbox, text, conf) in results:
-            text = text.strip()
-            conf_val = int(conf * 100)
+        ergebnisse_liste = []
 
-            # EasyOCR Konfidenz-Schwellenwert
-            if conf_val > 40 and len(text) > 2:
-                # Extrahiere Box-Koordinaten
-                xs = [p[0] for p in bbox]
-                ys = [p[1] for p in bbox]
-                x_ocr, y_ocr = int(min(xs)), int(min(ys))
-                w_box, h_box = int(max(xs) - x_ocr), int(max(ys) - y_ocr)
+        # Wir rotieren hier im Hintergrund-Thread
+        variants = [
+            (img_rgb, 0),                                     
+            (cv2.rotate(img_rgb, cv2.ROTATE_90_CLOCKWISE), 90), 
+            (cv2.rotate(img_rgb, cv2.ROTATE_180), 180), 
+            (cv2.rotate(img_rgb, cv2.ROTATE_90_COUNTERCLOCKWISE), 270),
+        ]
 
-                # Koordinaten-Berechnung je nach Winkel
-                if angle == 90:
-                    new_x, new_y = y_ocr, h_orig - x_ocr - w_box
-                    target_w, target_h = h_box, w_box
-                elif angle == 270:
-                    new_x, new_y = w_orig - y_ocr - h_box, x_ocr
-                    target_w, target_h = h_box, w_box
-                elif angle == 180:
-                    new_x, new_y = w_orig - x_ocr - w_box, h_orig - y_ocr - h_box
-                    target_w, target_h = w_box, h_box
-                else:
-                    new_x, new_y = x_ocr, y_ocr
-                    target_w, target_h = w_box, h_box
+        for img_rot, angle in variants:
+            if not running: break
+            results = reader.readtext(img_rot)
+            
+            for (bbox, text, conf) in results:
+                if not running: break
+                text = text.strip()
+                conf_val = int(conf * 100)
 
-                drittel = h_orig / 3
-                lade = "1" if new_y < drittel else "2" if new_y < (2 * drittel) else "3"
+                if conf_val > 40 and len(text) > 2:
+                    xs = [p[0] for p in bbox]
+                    ys = [p[1] for p in bbox]
+                    x_ocr, y_ocr = int(min(xs)), int(min(ys))
+                    w_box, h_box = int(max(xs) - x_ocr), int(max(ys) - y_ocr)
 
-                ergebnisse_liste.append({
-                    "wort": text,
-                    "y_achse": lade,
-                    "x_pixel": new_x,
-                    "y_pixel": new_y,
-                    "w": target_w,
-                    "h": target_h,
-                    "x_relativ_prozent": round((new_x / w_orig) * 100, 1)
-                })
-                print(f"[EasyOCR] {angle} {conf_val}% {text}")
+                    if angle == 90:
+                        new_x, new_y = y_ocr, h_orig - x_ocr - w_box
+                        target_w, target_h = h_box, w_box
+                    elif angle == 270:
+                        new_x, new_y = w_orig - y_ocr - h_box, x_ocr
+                        target_w, target_h = h_box, w_box
+                    elif angle == 180:
+                        new_x, new_y = w_orig - x_ocr - w_box, h_orig - y_ocr - h_box
+                        target_w, target_h = w_box, h_box
+                    else:
+                        new_x, new_y = x_ocr, y_ocr
+                        target_w, target_h = w_box, h_box
 
-    # Ergebnisse für die Anzeige im Hauptthread spiegeln
-    letzte_ergebnisse = ergebnisse_liste
-    save_to_mysql(ergebnisse_liste)
-    is_scanning = False # Thread fertig!
+                    drittel = h_orig / 3
+                    lade = "1" if new_y < drittel else "2" if new_y < (2 * drittel) else "3"
+
+                    ergebnisse_liste.append({
+                        "wort": text,
+                        "y_achse": lade,
+                        "x_pixel": new_x,
+                        "y_pixel": new_y,
+                        "w": target_w,
+                        "h": target_h,
+                        "x_relativ_prozent": round((new_x / w_orig) * 100, 1)
+                    })
+                    print(f"[EasyOCR] {angle} {conf_val}% {text}")
+
+        if running:
+            letzte_ergebnisse = ergebnisse_liste
+            save_to_mysql(ergebnisse_liste)
+    except Exception as e:
+        print(f"[OCR FEHLER] {e}")
+    finally:
+        is_scanning = False # Thread fertig!
 
 # --- GEOMETRIE ---
 
@@ -259,14 +205,13 @@ class FreshFrameReader:
         
         self.ret, self.frame = self.cap.read()
         self.stopped = False
-        # Thread starten, der permanent liest
         threading.Thread(target=self.update, args=(), daemon=True).start()
 
     def update(self):
         while not self.stopped:
             ret, frame = self.cap.read()
             if ret:
-                self.frame = frame # Überschreibt den alten Frame sofort
+                self.frame = frame
 
     def get_frame(self):
         return self.frame
@@ -283,13 +228,9 @@ if __name__ == "__main__":
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 2160)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 
-    # cap = FreshFrameReader(0)
-
-    
     ecken = koordinaten()
 
     while True:
-        #frame = cap.get_frame() # Liefert garantiert den neuesten Frame
         ret, frame = cap.read()
         if not ret: break
             
@@ -308,12 +249,10 @@ if __name__ == "__main__":
         # --- MULTITHREADING LOGIK ---
         if not is_scanning:
             is_scanning = True
-            # Starte OCR im Hintergrund mit einer Kopie des aktuellen Bildes
             t = threading.Thread(target=perform_ocr_thread, args=(original.copy(),))
             t.daemon = True
             t.start()
 
-        # Zeichne die letzten erkannten Wörter (damit es nicht flackert)
         for res in letzte_ergebnisse:
             color = (0, 255, 0)
             cv2.rectangle(original, (res['x_pixel'], res['y_pixel']), 
@@ -321,7 +260,6 @@ if __name__ == "__main__":
             cv2.putText(original, res['wort'], (res['x_pixel'], res['y_pixel'] - 10), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-        # Status-Anzeige
         status_text = "SCANNING..." if is_scanning else "WAITING..."
         cv2.putText(original, status_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
@@ -333,5 +271,17 @@ if __name__ == "__main__":
         except cv2.error:
             break
 
+    # CLEAN EXIT
+    print("\n[INFO] Beende Programm...")
+    running = False
     cap.release()
     cv2.destroyAllWindows()
+    
+    # Kurz warten falls OCR Thread noch läuft
+    if is_scanning:
+        print("[INFO] Warte auf Hintergrund-Thread...")
+        start_wait = time.time()
+        while is_scanning and (time.time() - start_wait < 2):
+            time.sleep(0.1)
+    
+    print("[INFO] Programm beendet.")
