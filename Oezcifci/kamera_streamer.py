@@ -12,6 +12,7 @@ is_scanning = False
 letzte_ergebnisse = []
 
 # --- PREPROCESSING FUNKTIONEN ---
+'''
 def preprocess_gray(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return gray
@@ -63,7 +64,7 @@ def preprocess_mono(image):
     _, thresh_inv = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
     return thresh, thresh_inv
-
+'''
 def preprocess(image):
     # 1. Farbraum-Wechsel: LAB trennt Helligkeit (L) von Farbinformation (A, B)
     # Das ist oft stabiler gegen Schatten als BGR-Graustufen.
@@ -126,9 +127,12 @@ def save_to_mysql(ergebnisse):
     except Exception as e:
         print(f"[SQL Fehler] {e}")
 
-def perform_ocr_thread(image, invers, h_orig, w_orig):
+def perform_ocr_thread(img_original):
     """ Diese Funktion läuft im Hintergrund """
     global is_scanning, letzte_ergebnisse
+    
+    h_orig, w_orig = img_original.shape[:2]
+    image, invers = preprocess(img_original)
     
     custom_config = r'--oem 3 --psm 11'
     ergebnisse_liste = []
@@ -141,10 +145,10 @@ def perform_ocr_thread(image, invers, h_orig, w_orig):
         (cv2.rotate(image, cv2.ROTATE_180), 180, ""), 
         (cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE), 270, ""),
 
-        (invers, 0, "inv"),                                     
-        (cv2.rotate(invers, cv2.ROTATE_90_CLOCKWISE), 90, "inv"), 
-        (cv2.rotate(invers, cv2.ROTATE_180), 180, "inv"), 
-        (cv2.rotate(invers, cv2.ROTATE_90_COUNTERCLOCKWISE), 270, "inv") 
+        #(invers, 0, "inv"),                                     
+        #(cv2.rotate(invers, cv2.ROTATE_90_CLOCKWISE), 90, "inv"), 
+        #(cv2.rotate(invers, cv2.ROTATE_180), 180, "inv"), 
+        #(cv2.rotate(invers, cv2.ROTATE_90_COUNTERCLOCKWISE), 270, "inv") 
     ]
 
     for img_rot, angle, neg in variants:
@@ -191,8 +195,8 @@ def perform_ocr_thread(image, invers, h_orig, w_orig):
     
     # Ergebnisse für die Anzeige im Hauptthread spiegeln
     letzte_ergebnisse = ergebnisse_liste
+    save_to_mysql(ergebnisse_liste)
     is_scanning = False # Thread fertig!
-    return ergebnisse_liste
 
 # --- GEOMETRIE ---
 
@@ -294,25 +298,15 @@ if __name__ == "__main__":
         original = cv2.rotate(resized, cv2.ROTATE_180)
 
         # --- MULTITHREADING LOGIK ---
-        #if not is_scanning:
-        #    is_scanning = True
-        #    # Starte OCR im Hintergrund
-        #    h_r, w_r = rotated.shape[:2]
-        #    t = threading.Thread(target=perform_ocr_thread, args=(rotated.copy(), h_r, w_r))
-        #    t.daemon = True # Thread beendet sich, wenn Hauptprogramm schließt
-        #    t.start()
-        
-        h_r, w_r = original.shape[:2]    
-        
-        vorverarbeitet, invers = preprocess(original)
-        
-        ergebnisse_liste = perform_ocr_thread(vorverarbeitet, invers,  h_r, w_r)        
-
-        # Ergebnisse in DB speichern
-        save_to_mysql(ergebnisse_liste)
+        if not is_scanning:
+            is_scanning = True
+            # Starte OCR im Hintergrund mit einer Kopie des aktuellen Bildes
+            t = threading.Thread(target=perform_ocr_thread, args=(original.copy(),))
+            t.daemon = True
+            t.start()
 
         # Zeichne die letzten erkannten Wörter (damit es nicht flackert)
-        for res in ergebnisse_liste:
+        for res in letzte_ergebnisse:
             color = (0, 255, 0)
             cv2.rectangle(original, (res['x_pixel'], res['y_pixel']), 
                           (res['x_pixel'] + res['w'], res['y_pixel'] + res['h']), color, 2)
