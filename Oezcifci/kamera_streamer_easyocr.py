@@ -25,6 +25,9 @@ running = True
 # --- PREPROCESSING FUNKTIONEN ---
 
 def preprocess(image):
+    # direkt Grau:
+    # return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
     # 1. Farbraum-Wechsel: LAB trennt Helligkeit (L) von Farbinformation (A, B)
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l_channel, a_channel, b_channel = cv2.split(lab)
@@ -36,16 +39,14 @@ def preprocess(image):
     # 3. Kanten erhalten durch Bilateral Filter
     filtered = cv2.bilateralFilter(enhanced_l, 9, 75, 75)
 
+    return enhanced_l
+
     # 4. Adaptives Thresholding
     thresh = cv2.adaptiveThreshold(
         filtered, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
         cv2.THRESH_BINARY, 11, 2
     )
-    
-    # Invertierte Version
-    thresh_inv = cv2.bitwise_not(thresh)
-
-    return thresh, thresh_inv
+    return thresh
 
 
 
@@ -90,7 +91,9 @@ def perform_ocr_thread(img_original):
     try:
         # EasyOCR arbeitet am besten mit RGB
         img_rgb = cv2.cvtColor(img_original, cv2.COLOR_BGR2RGB)
+        
         h_orig, w_orig = img_rgb.shape[:2]
+        #print(f"H:{h_orig}  W:{w_orig}")
         
         ergebnisse_liste = []
 
@@ -105,6 +108,7 @@ def perform_ocr_thread(img_original):
         for img_rot, angle in variants:
             if not running: break
             results = reader.readtext(img_rot)
+            #print(f"angle: {angle}")
             
             for (bbox, text, conf) in results:
                 if not running: break
@@ -160,8 +164,8 @@ def koordinaten():
             return json.load(f)
     except Exception:
         return []
-
-def sortiere_ecken(pts):
+'''
+def sortiere_eckenALT(pts):
     pts = np.array(pts, dtype="float32")
     rect = np.zeros((4, 2), dtype="float32")
     s = pts.sum(axis=1)
@@ -172,8 +176,11 @@ def sortiere_ecken(pts):
     rect[3] = pts[np.argmax(diff)]
     return rect
 
-def entzerren_bild(frame, ecken, sz=1280):
-    ecken_sortiert = sortiere_ecken(ecken)
+def entzerren_bildALT(frame, ecken, sz=1280):
+    print(f"E:  {ecken}")
+    ecken_sortiert = sortiere_ecken(ecken)    
+    print(f"ES: {ecken_sortiert}")
+    
     w1 = np.linalg.norm(ecken_sortiert[1] - ecken_sortiert[0])
     w2 = np.linalg.norm(ecken_sortiert[2] - ecken_sortiert[3])
     h1 = np.linalg.norm(ecken_sortiert[3] - ecken_sortiert[0])
@@ -181,6 +188,7 @@ def entzerren_bild(frame, ecken, sz=1280):
     
     breite_original = max(int(w1), int(w2))
     hoehe_original = max(int(h1), int(h2))
+    print(f"Bo: {breite_original} , Ho: {hoehe_original}")
 
     if breite_original > hoehe_original:
         ziel_w = int(sz * (hoehe_original / breite_original))
@@ -192,6 +200,35 @@ def entzerren_bild(frame, ecken, sz=1280):
         ziel_koordinaten = np.array([[0, 0], [ziel_w - 1, 0], [ziel_w - 1, ziel_h - 1], [0, ziel_h - 1]], dtype=np.float32)
 
     matrix = cv2.getPerspectiveTransform(ecken_sortiert, ziel_koordinaten)
+    return cv2.warpPerspective(frame, matrix, (ziel_w, ziel_h))
+'''
+def entzerren_bild(frame, ecken, sz=1600):
+    '''
+    #print(f"E:  {ecken}")
+    
+    maxx = max([x for x,y in ecken])
+    minx = min([x for x,y in ecken])
+    maxy = max([y for x,y in ecken])
+    miny = min([y for x,y in ecken])
+        
+    breite_original = maxx-minx
+    hoehe_original  = maxy-miny
+    #print(f"Bo: {breite_original} , Ho: {hoehe_original}")
+
+    # ASSUMPTION: Breiter als hoch
+    ziel_w = int(sz * (hoehe_original / breite_original))
+    ziel_h = sz
+    '''
+    ziel_h = sz
+    V = 52/80
+    ziel_w = int(sz * V)
+
+    ziel_koordinaten = [[0, 0], [ziel_w-1, 0], [ziel_w-1, ziel_h-1], [0, ziel_h-1]] 
+    #print(f"Z: {ziel_koordinaten}")
+
+    #print(f"Zw: {ziel_w} , Zh: {ziel_h}")
+    
+    matrix = cv2.getPerspectiveTransform(np.array(ecken, dtype=np.float32), np.array(ziel_koordinaten, dtype=np.float32))
     return cv2.warpPerspective(frame, matrix, (ziel_w, ziel_h))
 
 
@@ -239,12 +276,11 @@ if __name__ == "__main__":
             if cv2.waitKey(1) & 0xFF == ord('q'): break
             continue
 
-        quadrat = entzerren_bild(frame, ecken)
-        scale = 75
-        width = int(quadrat.shape[1] * scale / 100)
-        height = int(quadrat.shape[0] * scale / 100)
-        resized = cv2.resize(quadrat, (width, height), interpolation=cv2.INTER_AREA)
-        original = cv2.rotate(resized, cv2.ROTATE_180)
+        original = entzerren_bild(frame, ecken)
+        scale = 0.5 # Für screen!
+        width = int(original.shape[1] * scale)
+        height = int(original.shape[0] * scale)
+        onscreen = cv2.resize(original, (width, height), interpolation=cv2.INTER_AREA)
 
         # --- MULTITHREADING LOGIK ---
         if not is_scanning:
@@ -252,24 +288,29 @@ if __name__ == "__main__":
             t = threading.Thread(target=perform_ocr_thread, args=(original.copy(),))
             t.daemon = True
             t.start()
+        # perform_ocr_thread(original.copy());
 
-        for res in letzte_ergebnisse:
+        # onscreen = preprocess(onscreen)
+
+        for r in letzte_ergebnisse:
             color = (0, 255, 0)
-            cv2.rectangle(original, (res['x_pixel'], res['y_pixel']), 
-                          (res['x_pixel'] + res['w'], res['y_pixel'] + res['h']), color, 2)
-            cv2.putText(original, res['wort'], (res['x_pixel'], res['y_pixel'] - 10), 
+            dx = int(r['x_pixel']*scale)
+            dy = int(r['y_pixel']*scale)
+            cv2.rectangle(onscreen, (dx, dy),  (dx + int(r['w']*scale), dy + int(r['h']*scale)), color, 2)
+            cv2.putText(onscreen, r['wort'], (dx, dy - 10), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
         status_text = "SCANNING..." if is_scanning else "WAITING..."
-        cv2.putText(original, status_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(onscreen, status_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        cv2.imshow("Kamera Stream", original)
+        cv2.imshow("Kamera Stream", onscreen)
         
         if cv2.waitKey(1) & 0xFF == ord('q'): break
         try:
             if cv2.getWindowProperty("Kamera Stream", cv2.WND_PROP_VISIBLE) < 1: break
         except cv2.error:
             break
+        time.sleep(0.1)
 
     # CLEAN EXIT
     print("\n[INFO] Beende Programm...")
